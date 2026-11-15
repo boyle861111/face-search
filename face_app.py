@@ -495,7 +495,7 @@ class App(tk.Tk):
         self.v_targets = tk.StringVar(value=s.get("targets", str(BASE / "目標")))
         self.v_photos = tk.StringVar(value=s.get("photos", str(BASE / "測試照片")))
         self.v_out = tk.StringVar(value=s.get("out", str(BASE / "結果")))
-        self.v_thr = tk.DoubleVar(value=s.get("threshold", 0.40))
+        self.v_thr = tk.DoubleVar(value=s.get("threshold", 0.50))
         self.v_det = tk.StringVar(value=str(s.get("det_size", 640)))
         self.v_near = tk.BooleanVar(value=s.get("near", True))
         self.v_scorename = tk.BooleanVar(value=s.get("score_name", False))
