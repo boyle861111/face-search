@@ -1,0 +1,51 @@
+name: Build Windows EXE
+
+on:
+  workflow_dispatch:        # 在 GitHub 網頁上手動按按鈕執行
+  push:
+    tags: ['v*']            # 推送 v1.0 這類標籤時自動打包並發佈 Release
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install onnxruntime-directml opencv-python numpy pillow pyinstaller
+
+      - name: Download models
+        run: |
+          Invoke-WebRequest https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip -OutFile buffalo_l.zip
+          Expand-Archive buffalo_l.zip -DestinationPath models_tmp
+          New-Item -ItemType Directory -Force models/buffalo_l | Out-Null
+          Get-ChildItem models_tmp -Recurse -Include det_10g.onnx,w600k_r50.onnx | Copy-Item -Destination models/buffalo_l
+
+      - name: Build
+        run: pyinstaller --noconfirm --clean --windowed --name FaceSearch --collect-binaries onnxruntime face_app.py
+
+      - name: Add models and zip
+        run: |
+          New-Item -ItemType Directory -Force dist/FaceSearch/models/buffalo_l | Out-Null
+          Copy-Item models/buffalo_l/*.onnx dist/FaceSearch/models/buffalo_l/
+          Compress-Archive -Path dist/FaceSearch -DestinationPath FaceSearch.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FaceSearch
+          path: FaceSearch.zip
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: FaceSearch.zip

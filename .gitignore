@@ -1,0 +1,12 @@
+# 個人資料與大型檔案，不要上傳
+faces.db
+settings.json
+models/
+目標/
+測試照片/
+結果/
+*.zip
+build/
+dist/
+*.spec
+__pycache__/
