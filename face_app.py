@@ -754,10 +754,16 @@ class App(tk.Tk):
         if not p:
             return
         try:
+            w = max(200, self.preview.winfo_width())
+            h = max(200, self.preview.winfo_height())
+            side = max(w, h)
             with Image.open(p) as im:
+                try:
+                    im.draft("RGB", (side, side))   # JPEG 直接縮小解碼，大照片不會卡頓
+                except Exception:
+                    pass
+                im.thumbnail((side, side), Image.Resampling.BILINEAR)  # 先縮到預覽尺寸再轉正，減少運算量
                 im = ImageOps.exif_transpose(im).convert("RGB")
-                w = max(200, self.preview.winfo_width())
-                h = max(200, self.preview.winfo_height())
                 im.thumbnail((w, h))
                 self._photo = ImageTk.PhotoImage(im)
             self.preview.configure(image=self._photo, text="")
