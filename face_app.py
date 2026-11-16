@@ -31,6 +31,7 @@ import numpy as np
 import onnxruntime as ort
 from PIL import Image, ImageOps, ImageTk
 
+APP_VERSION = "dev"   # 打包時由 build.yml 改寫為版本號或 commit 代碼
 BASE = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
 
 
@@ -574,7 +575,7 @@ def save_settings(d):
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("照片人臉辨識")
+        self.title(f"照片人臉辨識 {APP_VERSION}")
         self.geometry("1150x740")
         self.minsize(950, 600)
         for name in ("TkDefaultFont", "TkTextFont", "TkHeadingFont", "TkMenuFont"):

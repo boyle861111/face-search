@@ -35,6 +35,15 @@ jobs:
           New-Item -ItemType Directory -Force models/buffalo_l | Out-Null
           Get-ChildItem models_tmp -Recurse -Include det_10g.onnx,w600k_r50.onnx | Copy-Item -Destination models/buffalo_l
 
+      - name: Set version
+        shell: pwsh
+        run: |
+          $v = "${{ inputs.version }}"
+          if (-not $v -and "${{ github.ref_type }}" -eq "tag") { $v = "${{ github.ref_name }}" }
+          if (-not $v) { $v = "dev-" + "${{ github.sha }}".Substring(0, 7) }
+          (Get-Content face_app.py -Raw -Encoding utf8) -replace 'APP_VERSION = "dev"', "APP_VERSION = `"$v`"" | Set-Content face_app.py -Encoding utf8 -NoNewline
+          Select-String -Path face_app.py -Pattern '^APP_VERSION'
+
       - name: Build
         run: pyinstaller --noconfirm --clean --windowed --name FaceSearch --collect-binaries onnxruntime face_app.py
 
