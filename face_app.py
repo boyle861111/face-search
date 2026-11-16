@@ -550,7 +550,10 @@ class Job:
         summary = "；".join(f"{nm}：命中 {a} 張、邊緣 {b} 張" for nm, (a, b) in counts.items())
         head = f"已中途停止（已處理 {processed} / {n} 張）。" if stopped else "完成。"
         self.log(f"{head}{summary}（本次新分析 {n_new} 張，其餘使用快取，耗時 {fmt_time(time.time() - t0)}）")
-        self.q.put(("done", stopped))
+        if not stopped and sum(a + b for a, b in counts.values()) == 0:
+            self.log("沒有找到任何符合的照片。可以試著：把「相似度門檻」調低一點（例如 0.40），"
+                     "或把「偵測解析度」調高（例如 1024），照片中人臉較小時特別有幫助。")
+        self.q.put(("done", {"stopped": stopped, "counts": counts}))
 
 
 # ================================================================ 介面
@@ -768,6 +771,19 @@ class App(tk.Tk):
             self.job.stop.set()
         self.destroy()
 
+    def _on_done(self, data):
+        stopped, counts = data["stopped"], data["counts"]
+        parts = "｜".join(f"{nm} 命中 {a}／邊緣 {b}" for nm, (a, b) in counts.items())
+        self.lbl_status["text"] = f"{'已停止' if stopped else '完成'}｜{parts}"
+        total = sum(a + b for a, b in counts.values())
+        if total and self.run_dir:
+            title = "已停止" if stopped else "搜尋完成"
+            if messagebox.askyesno(title, f"{parts.replace('｜', chr(10))}\n\n要開啟結果資料夾嗎？"):
+                self._open_out()
+        elif not stopped:
+            messagebox.showinfo("搜尋完成", "沒有找到符合的照片。\n\n建議：把「相似度門檻」調低一點（例如 0.40），"
+                                "或把「偵測解析度」調高（例如 1024）後再試一次。")
+
     # ---------------- 背景訊息
     def _poll(self):
         try:
@@ -796,7 +812,7 @@ class App(tk.Tk):
                     self.run_dir = data
                     self.b_open["state"] = "normal"
                 elif kind == "done":
-                    self.lbl_status["text"] = "已停止" if data else "完成"
+                    self._on_done(data)
                 elif kind == "error":
                     self._log("錯誤：" + data.splitlines()[0])
                     messagebox.showerror("錯誤", data[:2000])
