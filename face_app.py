@@ -451,6 +451,20 @@ class Job:
             self.log(f"無法讀取：{p}（{err}）")
         return [e for _, _, e in embs]
 
+    def _clean_cache(self, con, pdir, files):
+        """移除快取中位於本次照片資料夾、但檔案已不存在的紀錄（其他資料夾的快取不動）"""
+        try:
+            seen = {str(p) for p in files}
+            gone = [(pid,) for pid, path in con.execute("SELECT id, path FROM photos")
+                    if path not in seen and is_under(Path(path), pdir) and not Path(path).exists()]
+            if gone:
+                with con:
+                    con.executemany("DELETE FROM faces WHERE photo_id=?", gone)
+                    con.executemany("DELETE FROM photos WHERE id=?", gone)
+                self.log(f"已清除 {len(gone)} 筆已不存在照片的快取紀錄。")
+        except Exception:
+            log_exception("快取清理失敗")
+
     def _run(self):
         cfg = self.cfg
         tdir = Path(cfg["targets"]).resolve()
@@ -548,6 +562,8 @@ class Job:
                 self.q.put(("progress", (i, n, n_faces, el, el / i * (n - i))))
 
         stopped = self.stop.is_set()
+        if not stopped:
+            self._clean_cache(con, pdir, files)
         summary = "；".join(f"{nm}：命中 {a} 張、邊緣 {b} 張" for nm, (a, b) in counts.items())
         head = f"已中途停止（已處理 {processed} / {n} 張）。" if stopped else "完成。"
         self.log(f"{head}{summary}（本次新分析 {n_new} 張，其餘使用快取，耗時 {fmt_time(time.time() - t0)}）")
