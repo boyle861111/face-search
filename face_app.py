@@ -358,7 +358,13 @@ class Job:
         """
         targets = {}
         troot = Path(self.cfg["targets"])
-        for d in sorted(x for x in troot.iterdir() if x.is_dir()):
+        dirs = sorted(x for x in troot.iterdir() if x.is_dir())
+        if not dirs and any(p.suffix.lower() in EXTS for p in troot.iterdir() if p.is_file()):
+            # 目標資料夾直接放照片（沒有人名子資料夾）：整個資料夾當作一位目標
+            self.log(f"目標資料夾內沒有人名子資料夾，已把裡面的照片當作同一位目標「{troot.name}」。"
+                     "若要找多個人，請為每個人建立一個子資料夾（目標\\人名\\照片.jpg）。")
+            dirs = [troot]
+        for d in dirs:
             singles, multis = [], []   # (檔名, 向量) / (檔名, [向量...], 最大臉索引)
             for p in sorted(d.iterdir()):
                 if p.suffix.lower() not in EXTS:
@@ -410,8 +416,12 @@ class Job:
                     sim = T @ T.T
                     np.fill_diagonal(sim, np.nan)
                     msg += f"，樣本間最低相似度 {float(np.nanmin(sim)):.2f}"
+                if len(samples) < 3:
+                    msg += "（樣本少於 3 張，準確度可能較低，建議多放幾張不同角度的清楚照片）"
                 self.log(msg)
                 targets[d.name] = T
+            else:
+                self.log(f"目標「{d.name}」無可用樣本（資料夾內沒有照片，或照片都偵測不到人臉），已略過。")
         return targets
 
     def _compute(self, con, det, rec, p, st):
