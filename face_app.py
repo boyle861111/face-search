@@ -965,7 +965,28 @@ class App(tk.Tk):
             self.after(100, self._poll)
 
 
+def selftest():
+    """無介面自我測試（CI 用）：載入模型並對測試圖做偵測與特徵計算，成功回傳 0"""
+    try:
+        det_p, rec_p = ensure_models(lambda m: None)
+        det = Detector(det_p, False, 640)
+        rec = Recognizer(rec_p, False)
+        img = np.full((480, 640, 3), 128, np.uint8)
+        faces = det.detect(img)
+        kps = np.array([[250, 200], [390, 200], [320, 260], [265, 330], [375, 330]], np.float32)
+        vec = rec.embed_many(img, [kps])[0]
+        assert vec is not None and vec.shape[-1] == 512, "特徵向量格式錯誤"
+        with open(DATA_DIR / "selftest.txt", "w", encoding="utf-8") as f:
+            f.write(f"OK {APP_VERSION} faces={len(faces)}\n")
+        return 0
+    except Exception:
+        log_exception("selftest 失敗")
+        return 1
+
+
 def main():
+    if "--selftest" in sys.argv:
+        sys.exit(selftest())
     try:
         import ctypes
         ctypes.windll.shcore.SetProcessDpiAwareness(1)

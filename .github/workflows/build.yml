@@ -26,7 +26,8 @@ jobs:
       - name: Install packages
         run: |
           python -m pip install --upgrade pip
-          pip install onnxruntime-directml opencv-python numpy pillow pyinstaller pillow-heif
+          # 固定版本，避免套件更新讓打包壞掉；要升級時改這裡並重新打包測試
+          pip install onnxruntime-directml==1.20.1 opencv-python==4.10.0.84 numpy==1.26.4 pillow==11.0.0 pyinstaller==6.11.1 pillow-heif==0.21.0
 
       - name: Download models
         run: |
@@ -34,6 +35,9 @@ jobs:
           Expand-Archive buffalo_l.zip -DestinationPath models_tmp
           New-Item -ItemType Directory -Force models/buffalo_l | Out-Null
           Get-ChildItem models_tmp -Recurse -Include det_10g.onnx,w600k_r50.onnx | Copy-Item -Destination models/buffalo_l
+
+      - name: Check syntax
+        run: python -m py_compile face_app.py
 
       - name: Set version
         shell: pwsh
@@ -47,10 +51,22 @@ jobs:
       - name: Build
         run: pyinstaller --noconfirm --clean --windowed --name FaceSearch --collect-binaries onnxruntime --collect-all pillow_heif face_app.py
 
-      - name: Add models and zip
+      - name: Add models
         run: |
           New-Item -ItemType Directory -Force dist/FaceSearch/models/buffalo_l | Out-Null
           Copy-Item models/buffalo_l/*.onnx dist/FaceSearch/models/buffalo_l/
+
+      - name: Self test (load models without GUI)
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath dist/FaceSearch/FaceSearch.exe -ArgumentList '--selftest' -Wait -PassThru
+          if (Test-Path dist/FaceSearch/face_search.log) { Get-Content dist/FaceSearch/face_search.log }
+          if ($p.ExitCode -ne 0) { throw "selftest failed: exit $($p.ExitCode)" }
+          Get-Content dist/FaceSearch/selftest.txt
+          Remove-Item dist/FaceSearch/selftest.txt, dist/FaceSearch/faces.db, dist/FaceSearch/settings.json, dist/FaceSearch/face_search.log -ErrorAction SilentlyContinue
+
+      - name: Zip
+        run: |
           Compress-Archive -Path dist/FaceSearch -DestinationPath FaceSearch.zip
 
       - uses: actions/upload-artifact@v4
