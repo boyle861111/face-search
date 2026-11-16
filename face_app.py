@@ -58,6 +58,7 @@ MODEL_URL = "https://github.com/deepinsight/insightface/releases/download/v0.7/b
 DB_PATH = DATA_DIR / "faces.db"
 SETTINGS_PATH = DATA_DIR / "settings.json"
 EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+ALL_TARGETS = "（全部）"
 MAX_SIDE = 2560      # 讀圖長邊上限，節省記憶體
 MIN_FACE = 20        # 忽略小於此像素的臉
 MARGIN = 0.10        # 門檻以下多少範圍列為「邊緣」
@@ -640,6 +641,8 @@ class App(tk.Tk):
         self.job = None
         self.run_dir = None
         self.items = {}
+        self.rows = []          # [(values, tag, 輸出檔), ...] 結果清單完整資料，供排序與篩選
+        self.sort_col, self.sort_desc = None, False
         self._photo = None
 
         self._build()
@@ -711,12 +714,21 @@ class App(tk.Tk):
 
         left = ttk.Frame(body)
         body.add(left, weight=3)
+        flt = ttk.Frame(left)
+        flt.pack(fill="x", pady=(0, 4))
+        ttk.Label(flt, text="顯示目標").pack(side="left")
+        self.v_filter = tk.StringVar(value=ALL_TARGETS)
+        self.cb_filter = ttk.Combobox(flt, textvariable=self.v_filter, values=[ALL_TARGETS],
+                                      width=16, state="readonly")
+        self.cb_filter.pack(side="left", padx=4)
+        self.cb_filter.bind("<<ComboboxSelected>>", lambda _: self._refill_tree())
+        ttk.Label(flt, text="（點欄位標題可排序）", foreground="gray").pack(side="left")
         tv_frame = ttk.Frame(left)
         tv_frame.pack(fill="both", expand=True)
         cols = ("target", "cat", "score", "file")
         self.tree = ttk.Treeview(tv_frame, columns=cols, show="headings", selectmode="browse")
         for c, t, wd in zip(cols, ("目標", "分類", "相似度", "照片"), (100, 60, 70, 360)):
-            self.tree.heading(c, text=t)
+            self.tree.heading(c, text=t, command=lambda c=c: self._sort_by(c))
             self.tree.column(c, width=wd, anchor="w" if c == "file" else "center", stretch=(c == "file"))
         self.tree.tag_configure("命中", foreground="#1a7f37")
         self.tree.tag_configure("邊緣", foreground="#b26a00")
@@ -777,6 +789,10 @@ class App(tk.Tk):
         save_settings(cfg)
         self.tree.delete(*self.tree.get_children())
         self.items.clear()
+        self.rows.clear()
+        self.sort_col, self.sort_desc = None, False
+        self.v_filter.set(ALL_TARGETS)
+        self.cb_filter["values"] = [ALL_TARGETS]
         self.n_hit = self.n_near = 0
         self.lbl_count["text"] = ""
         self.pb["value"] = 0
@@ -795,6 +811,25 @@ class App(tk.Tk):
     def _open_out(self):
         if self.run_dir and Path(self.run_dir).exists():
             os.startfile(self.run_dir)
+
+    def _sort_by(self, col):
+        idx = ("target", "cat", "score", "file").index(col)
+        self.sort_desc = not self.sort_desc if self.sort_col == col else (col == "score")  # 相似度預設由高到低
+        self.sort_col = col
+        key = (lambda r: float(r[0][idx])) if col == "score" else (lambda r: r[0][idx])
+        self.rows.sort(key=key, reverse=self.sort_desc)
+        self._refill_tree()
+
+    def _refill_tree(self):
+        self.tree.delete(*self.tree.get_children())
+        self.items.clear()
+        f = self.v_filter.get()
+        for values, tag, dst in self.rows:
+            if f in (ALL_TARGETS, values[0]):
+                self.items[self.tree.insert("", "end", values=values, tags=(tag,))] = dst
+        for c, t in zip(("target", "cat", "score", "file"), ("目標", "分類", "相似度", "照片")):
+            arrow = (" ▼" if self.sort_desc else " ▲") if c == self.sort_col else ""
+            self.tree.heading(c, text=t + arrow)
 
     def _selected_path(self):
         sel = self.tree.selection()
@@ -864,8 +899,13 @@ class App(tk.Tk):
                                                f"經過 {fmt_time(el)}｜剩餘約 {fmt_time(eta)}")
                 elif kind == "hit":
                     nm, cat, score, src, dst = data
-                    iid = self.tree.insert("", "end", values=(nm, cat, f"{score:.3f}", src), tags=(cat,))
-                    self.items[iid] = dst
+                    row = ((nm, cat, f"{score:.3f}", src), cat, dst)
+                    self.rows.append(row)
+                    if nm not in self.cb_filter["values"]:
+                        self.cb_filter["values"] = (*self.cb_filter["values"], nm)
+                    if self.v_filter.get() in (ALL_TARGETS, nm):
+                        iid = self.tree.insert("", "end", values=row[0], tags=(row[1],))
+                        self.items[iid] = dst
                     if cat == "命中":
                         self.n_hit += 1
                     else:
