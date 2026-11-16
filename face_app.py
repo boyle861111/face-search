@@ -558,6 +558,31 @@ class Job:
 
 
 # ================================================================ 介面
+class Tooltip:
+    """滑鼠移到元件上時顯示說明"""
+
+    def __init__(self, widget, text):
+        self.widget, self.text, self.tip = widget, text, None
+        widget.bind("<Enter>", self._show, add="+")
+        widget.bind("<Leave>", self._hide, add="+")
+
+    def _show(self, _=None):
+        if self.tip:
+            return
+        x = self.widget.winfo_rootx() + 10
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 4
+        self.tip = tk.Toplevel(self.widget)
+        self.tip.wm_overrideredirect(True)
+        self.tip.wm_geometry(f"+{x}+{y}")
+        tk.Label(self.tip, text=self.text, justify="left", background="#ffffe0",
+                 relief="solid", borderwidth=1, padx=6, pady=4).pack()
+
+    def _hide(self, _=None):
+        if self.tip:
+            self.tip.destroy()
+            self.tip = None
+
+
 def load_settings():
     try:
         return json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
@@ -622,14 +647,27 @@ class App(tk.Tk):
 
         opt = ttk.Frame(top)
         opt.grid(row=3, column=0, columnspan=3, sticky="w", pady=(8, 0))
-        ttk.Label(opt, text="相似度門檻").pack(side="left")
-        ttk.Scale(opt, from_=0.25, to=0.70, variable=self.v_thr, length=200,
-                  command=self._thr_changed).pack(side="left", padx=4)
+        tip_thr = ("相似度門檻：越高越嚴格、誤判越少，但可能漏掉角度不同的照片。\n"
+                   "建議 0.45～0.55（預設 0.50）。找不到人時調低，誤判太多時調高。")
+        tip_det = ("偵測解析度：越高越能找到照片中較小的臉（例如團體照），但速度較慢。\n"
+                   "一般照片用 640；團體照、遠景照建議 1024 或 1280。")
+        w = ttk.Label(opt, text="相似度門檻 ⓘ")
+        w.pack(side="left")
+        Tooltip(w, tip_thr)
+        w = ttk.Scale(opt, from_=0.25, to=0.70, variable=self.v_thr, length=200, command=self._thr_changed)
+        w.pack(side="left", padx=4)
+        Tooltip(w, tip_thr)
         self.lbl_thr = ttk.Label(opt, width=12)
         self.lbl_thr.pack(side="left")
-        ttk.Label(opt, text="偵測解析度").pack(side="left", padx=(12, 4))
-        ttk.Combobox(opt, textvariable=self.v_det, values=["640", "800", "1024", "1280"],
-                     width=6, state="readonly").pack(side="left")
+        ttk.Label(opt, text="越高越嚴格", foreground="gray").pack(side="left")
+        w = ttk.Label(opt, text="偵測解析度 ⓘ")
+        w.pack(side="left", padx=(12, 4))
+        Tooltip(w, tip_det)
+        w = ttk.Combobox(opt, textvariable=self.v_det, values=["640", "800", "1024", "1280"],
+                         width=6, state="readonly")
+        w.pack(side="left")
+        Tooltip(w, tip_det)
+        ttk.Label(opt, text="越高越能找到小臉，但較慢", foreground="gray").pack(side="left", padx=(4, 0))
         ttk.Checkbutton(opt, text="輸出邊緣照片", variable=self.v_near).pack(side="left", padx=(16, 0))
         ttk.Checkbutton(opt, text="檔名加上相似度", variable=self.v_scorename).pack(side="left", padx=(12, 0))
         ttk.Checkbutton(opt, text="使用 GPU", variable=self.v_gpu).pack(side="left", padx=(12, 0))
