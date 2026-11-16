@@ -32,10 +32,30 @@ import onnxruntime as ort
 from PIL import Image, ImageOps, ImageTk
 
 BASE = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
+
+
+def _pick_data_dir():
+    """exe 旁可寫就用 exe 旁；否則（例如放在 Program Files）改用 %LOCALAPPDATA%\\FaceSearch"""
+    try:
+        t = BASE / ".write_test"
+        t.write_text("x", encoding="utf-8")
+        t.unlink()
+        return BASE
+    except OSError:
+        root = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+        d = Path(root) / "FaceSearch"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+
+DATA_DIR = _pick_data_dir()
+# 模型隨 exe 附帶；若 exe 旁沒有模型又不可寫，下載到資料夾 DATA_DIR
 MODEL_DIR = BASE / "models" / "buffalo_l"
+if DATA_DIR != BASE and not (MODEL_DIR / "det_10g.onnx").exists():
+    MODEL_DIR = DATA_DIR / "models" / "buffalo_l"
 MODEL_URL = "https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip"
-DB_PATH = BASE / "faces.db"
-SETTINGS_PATH = BASE / "settings.json"
+DB_PATH = DATA_DIR / "faces.db"
+SETTINGS_PATH = DATA_DIR / "settings.json"
 EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 MAX_SIDE = 2560      # 讀圖長邊上限，節省記憶體
 MIN_FACE = 20        # 忽略小於此像素的臉
@@ -50,7 +70,7 @@ class UserError(Exception):
     pass
 
 
-LOG_PATH = BASE / "face_search.log"
+LOG_PATH = DATA_DIR / "face_search.log"
 
 
 def friendly_error(e):
