@@ -647,6 +647,7 @@ class App(tk.Tk):
 
         self._build()
         self._thr_changed()
+        self._first_run_guide()
         self.after(100, self._poll)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -701,6 +702,9 @@ class App(tk.Tk):
         self.b_stop.pack(side="left", padx=6)
         self.b_open = ttk.Button(btns, text="開啟結果資料夾", command=self._open_out, state="disabled")
         self.b_open.pack(side="left")
+        b = ttk.Button(btns, text="建立目標資料夾", command=self._make_targets)
+        b.pack(side="left", padx=(6, 0))
+        Tooltip(b, "在「目標資料夾」位置建立範例結構（目標\\人名1），並開啟資料夾讓你放照片。")
         self.lbl_count = ttk.Label(btns, text="")
         self.lbl_count.pack(side="right")
 
@@ -811,6 +815,29 @@ class App(tk.Tk):
     def _open_out(self):
         if self.run_dir and Path(self.run_dir).exists():
             os.startfile(self.run_dir)
+
+    def _first_run_guide(self):
+        if Path(self.v_targets.get()).is_dir():
+            return
+        self._log("歡迎使用！第一次使用請依下列步驟：")
+        self._log("1. 按「建立目標資料夾」，會建立「目標\\人名1」範例資料夾。")
+        self._log("2. 把要找的人的照片（建議 3～5 張清楚正臉）放進「人名1」，並把資料夾改成他的名字；"
+                  "要找多個人就每人建一個子資料夾。")
+        self._log("3. 「照片資料夾」選擇要搜尋的大量照片所在位置，按「開始搜尋」。")
+        self._log("4. 找到的照片會複製到「輸出資料夾」，依人名與「命中／邊緣」分類，原始照片不會被更動。")
+
+    def _make_targets(self):
+        t = Path(self.v_targets.get() or (BASE / "目標"))
+        try:
+            subs = [x for x in t.iterdir() if x.is_dir()] if t.is_dir() else []
+            if not subs:
+                (t / "人名1").mkdir(parents=True, exist_ok=True)
+                self._log(f"已建立：{t / '人名1'}（請把目標人物的照片放進去，並把資料夾改成他的名字）")
+            self.v_targets.set(str(t))
+            os.startfile(t)
+        except Exception as e:
+            log_exception("建立目標資料夾失敗")
+            messagebox.showerror("錯誤", friendly_error(e))
 
     def _sort_by(self, col):
         idx = ("target", "cat", "score", "file").index(col)
