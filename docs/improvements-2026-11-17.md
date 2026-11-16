@@ -7,7 +7,7 @@
 ### 0. 這次的修改「還沒有推送到 GitHub」
 排程環境沒有 `boyle861111/face-search` 的推送權限（git proxy 回應 403，repo 不在授權清單內），所以所有 commit 只存在排程環境，並另存成 patch 檔：
 
-- 專案文件 `claude/face-search-2026-11-17.patch`（Projects 內，一個檔案包含全部 18 個 commit，`git am` 格式）
+- 專案文件 `claude/face-search-2026-11-17.patch`（Projects 內，一個檔案包含這次全部 19 個 commit，已驗證可乾淨套用到目前的 main 21ca9fa，`git am` 格式）
 
 套用方式（在你電腦的 repo 資料夾）：
 ```
