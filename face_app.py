@@ -435,12 +435,13 @@ class Job:
         self.q.put(("run_dir", str(run_dir)))
 
         con = open_db()
+        # 讀取失敗（error 不為空）的紀錄不列入快取，下次會重新分析
         cache = {r[0]: (r[1], r[2], r[3], r[4] or 640)
-                 for r in con.execute("SELECT path, id, mtime, size, det_size FROM photos")}
+                 for r in con.execute("SELECT path, id, mtime, size, det_size FROM photos WHERE error IS NULL")}
         thr = cfg["threshold"]
         low = thr - MARGIN
         counts = {nm: [0, 0] for nm in names}
-        n_faces = n_new = 0
+        n_faces = n_new = processed = 0
         t0 = time.time()
 
         with open(run_dir / "results.csv", "w", newline="", encoding="utf-8-sig") as f:
@@ -490,12 +491,13 @@ class Job:
                         f.flush()
                         self.q.put(("hit", (nm, cat, best, str(p), str(dst))))
 
+                processed = i
                 el = time.time() - t0
                 self.q.put(("progress", (i, n, n_faces, el, el / i * (n - i))))
 
         stopped = self.stop.is_set()
         summary = "；".join(f"{nm}：命中 {a} 張、邊緣 {b} 張" for nm, (a, b) in counts.items())
-        head = f"已中途停止（處理 {i if files else 0} / {n} 張）。" if stopped else "完成。"
+        head = f"已中途停止（已處理 {processed} / {n} 張）。" if stopped else "完成。"
         self.log(f"{head}{summary}（本次新分析 {n_new} 張，其餘使用快取，耗時 {fmt_time(time.time() - t0)}）")
         self.q.put(("done", stopped))
 
