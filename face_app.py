@@ -668,9 +668,11 @@ class App(tk.Tk):
         w.pack(side="left")
         Tooltip(w, tip_det)
         ttk.Label(opt, text="越高越能找到小臉，但較慢", foreground="gray").pack(side="left", padx=(4, 0))
-        ttk.Checkbutton(opt, text="輸出邊緣照片", variable=self.v_near).pack(side="left", padx=(16, 0))
-        ttk.Checkbutton(opt, text="檔名加上相似度", variable=self.v_scorename).pack(side="left", padx=(12, 0))
-        ttk.Checkbutton(opt, text="使用 GPU", variable=self.v_gpu).pack(side="left", padx=(12, 0))
+        opt2 = ttk.Frame(top)   # 選項放第二列，避免視窗太窄時被截掉
+        opt2.grid(row=4, column=0, columnspan=3, sticky="w", pady=(4, 0))
+        ttk.Checkbutton(opt2, text="輸出邊緣照片", variable=self.v_near).pack(side="left")
+        ttk.Checkbutton(opt2, text="檔名加上相似度", variable=self.v_scorename).pack(side="left", padx=(12, 0))
+        ttk.Checkbutton(opt2, text="使用 GPU", variable=self.v_gpu).pack(side="left", padx=(12, 0))
 
         btns = ttk.Frame(frm)
         btns.pack(fill="x", pady=8)
