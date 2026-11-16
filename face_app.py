@@ -50,6 +50,18 @@ class UserError(Exception):
     pass
 
 
+LOG_PATH = BASE / "face_search.log"
+
+
+def log_exception(title):
+    """把目前例外的完整 traceback 附加到 log 檔（失敗時忽略）"""
+    try:
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(f"\n===== {time.strftime('%Y-%m-%d %H:%M:%S')} {title}\n{traceback.format_exc()}")
+    except Exception:
+        pass
+
+
 # ================================================================ 模型
 def ensure_models(status):
     det = MODEL_DIR / "det_10g.onnx"
@@ -89,6 +101,13 @@ def make_session(path, use_gpu):
         so.enable_mem_pattern = False
         so.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
         providers = ["DmlExecutionProvider", "CPUExecutionProvider"]
+        try:
+            return ort.InferenceSession(str(path), sess_options=so, providers=providers)
+        except Exception:
+            # 顯示卡驅動不相容等原因，改用 CPU（呼叫端由 get_providers() 得知實際裝置）
+            so = ort.SessionOptions()
+            so.log_severity_level = 3
+            providers = ["CPUExecutionProvider"]
     return ort.InferenceSession(str(path), sess_options=so, providers=providers)
 
 
@@ -358,11 +377,13 @@ class Job:
         embs, err = [], None
         try:
             img = load_rgb(p)
+        except Exception as ex:
+            img, err = None, str(ex)[:200]
+        if img is not None:
+            # 推論錯誤（例如 GPU 中途失敗）直接拋出，由呼叫端處理，不記成「讀取失敗」也不寫入快取
             faces = [f for f in det.detect(img) if min(f[0][2] - f[0][0], f[0][3] - f[0][1]) >= MIN_FACE]
             vecs = rec.embed_many(img, [k for _, k, _ in faces])
             embs = [(b, s, e) for (b, _, s), e in zip(faces, vecs) if e is not None]
-        except Exception as ex:
-            err = str(ex)[:200]
         with con:
             old = con.execute("SELECT id FROM photos WHERE path=?", (str(p),)).fetchone()
             if old:
@@ -388,8 +409,11 @@ class Job:
         det_p, rec_p = ensure_models(self.status)
         det = Detector(det_p, cfg["gpu"], cfg["det_size"])
         rec = Recognizer(rec_p, cfg["gpu"])
-        dev = "GPU (DirectML)" if "DmlExecutionProvider" in det.sess.get_providers() else "CPU"
+        on_gpu = "DmlExecutionProvider" in det.sess.get_providers()
+        dev = "GPU (DirectML)" if on_gpu else "CPU"
         self.log(f"模型載入完成，使用：{dev}")
+        if cfg["gpu"] and not on_gpu:
+            self.log("提示：無法使用 GPU（可能是顯示卡驅動不相容），已自動改用 CPU，速度會較慢。")
 
         self.status("處理目標照片...")
         targets = self._embed_targets(det, rec)
@@ -435,7 +459,18 @@ class Job:
                     embs = [np.frombuffer(r[0], np.float32)
                             for r in con.execute("SELECT emb FROM faces WHERE photo_id=?", (c[0],))]
                 else:
-                    embs = self._compute(con, det, rec, p, st)
+                    try:
+                        embs = self._compute(con, det, rec, p, st)
+                    except Exception:
+                        if not on_gpu:
+                            raise
+                        # GPU 推論中途失敗：改用 CPU 重建模型後重試這張
+                        log_exception("GPU 推論失敗，改用 CPU")
+                        self.log("提示：GPU 運算發生錯誤，已自動改用 CPU 繼續（速度會較慢）。")
+                        det = Detector(det_p, False, cfg["det_size"])
+                        rec = Recognizer(rec_p, False)
+                        on_gpu = False
+                        embs = self._compute(con, det, rec, p, st)
                     n_new += 1
                 n_faces += len(embs)
 
