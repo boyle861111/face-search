@@ -53,6 +53,26 @@ class UserError(Exception):
 LOG_PATH = BASE / "face_search.log"
 
 
+def friendly_error(e):
+    """把非預期例外轉成一般人看得懂的中文說明"""
+    import errno
+    if isinstance(e, MemoryError) or "out of memory" in str(e).lower() or "bad_alloc" in str(e):
+        msg = "記憶體不足。請關閉其他程式，或把「偵測解析度」調低後再試。"
+    elif isinstance(e, PermissionError) or getattr(e, "errno", None) in (errno.EACCES, errno.EPERM):
+        msg = (f"沒有權限讀寫檔案：{getattr(e, 'filename', '') or ''}\n"
+               "請確認資料夾不是唯讀、檔案沒有被其他程式開啟，或改選其他輸出資料夾。")
+    elif getattr(e, "errno", None) == errno.ENOSPC or getattr(e, "winerror", None) == 112:
+        msg = "磁碟空間不足。請清出空間或改選其他磁碟的輸出資料夾。"
+    elif getattr(e, "winerror", None) in (206, 3) or getattr(e, "errno", None) == errno.ENAMETOOLONG:
+        msg = (f"路徑太長或找不到路徑：{getattr(e, 'filename', '') or ''}\n"
+               "請把照片／輸出資料夾移到較短的路徑（例如 D:\\照片）後再試。")
+    elif isinstance(e, FileNotFoundError):
+        msg = f"找不到檔案或資料夾：{getattr(e, 'filename', '') or ''}\n請確認資料夾仍存在（外接硬碟是否已拔除）。"
+    else:
+        msg = f"發生未預期的錯誤：{e}"
+    return f"{msg}\n\n（詳細錯誤已記錄在：{LOG_PATH}）"
+
+
 def log_exception(title):
     """把目前例外的完整 traceback 附加到 log 檔（失敗時忽略）"""
     try:
@@ -304,7 +324,8 @@ class Job:
         except UserError as e:
             self.q.put(("error", str(e)))
         except Exception as e:
-            self.q.put(("error", f"{e}\n\n{traceback.format_exc()}"))
+            log_exception("執行時發生非預期錯誤")
+            self.q.put(("error", friendly_error(e)))
         finally:
             self.q.put(("finished", None))
 
