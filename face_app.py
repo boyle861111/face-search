@@ -58,6 +58,12 @@ MODEL_URL = "https://github.com/deepinsight/insightface/releases/download/v0.7/b
 DB_PATH = DATA_DIR / "faces.db"
 SETTINGS_PATH = DATA_DIR / "settings.json"
 EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+try:  # iPhone HEIC 照片（需安裝 pillow-heif；沒有安裝時自動略過此格式）
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+    EXTS |= {".heic", ".heif"}
+except Exception:
+    pass
 ALL_TARGETS = "（全部）"
 MAX_SIDE = 2560      # 讀圖長邊上限，節省記憶體
 MIN_FACE = 20        # 忽略小於此像素的臉
@@ -494,7 +500,7 @@ class Job:
                  and not is_under(p, tdir) and not is_under(p, odir)]
         n = len(files)
         if n == 0:
-            raise UserError("照片資料夾內沒有找到照片（支援 jpg / png / bmp / webp）。")
+            raise UserError(f"照片資料夾內沒有找到照片（支援 {' / '.join(sorted(e[1:] for e in EXTS))}）。")
         self.log(f"共 {n} 張照片，開始搜尋...")
 
         run_dir = odir / time.strftime("%Y%m%d_%H%M%S")
