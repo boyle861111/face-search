@@ -493,9 +493,11 @@ class Job:
                 el = time.time() - t0
                 self.q.put(("progress", (i, n, n_faces, el, el / i * (n - i))))
 
+        stopped = self.stop.is_set()
         summary = "；".join(f"{nm}：命中 {a} 張、邊緣 {b} 張" for nm, (a, b) in counts.items())
-        self.log(f"完成。{summary}（本次新分析 {n_new} 張，其餘使用快取，耗時 {fmt_time(time.time() - t0)}）")
-        self.q.put(("done", None))
+        head = f"已中途停止（處理 {i if files else 0} / {n} 張）。" if stopped else "完成。"
+        self.log(f"{head}{summary}（本次新分析 {n_new} 張，其餘使用快取，耗時 {fmt_time(time.time() - t0)}）")
+        self.q.put(("done", stopped))
 
 
 # ================================================================ 介面
@@ -741,7 +743,7 @@ class App(tk.Tk):
                     self.run_dir = data
                     self.b_open["state"] = "normal"
                 elif kind == "done":
-                    self.lbl_status["text"] = "完成"
+                    self.lbl_status["text"] = "已停止" if data else "完成"
                 elif kind == "error":
                     self._log("錯誤：" + data.splitlines()[0])
                     messagebox.showerror("錯誤", data[:2000])
